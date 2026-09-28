@@ -1,5 +1,3 @@
-# Docker and QEMU now run on Vinix
-
 Welcome to the Vinix blog. This is where we will post news about
 [Vinix](https://vinix-os.org), the operating system written in [V](https://vlang.io).
 
