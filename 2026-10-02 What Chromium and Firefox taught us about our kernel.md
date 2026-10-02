@@ -1,4 +1,4 @@
-Firefox and Chromium have been useful teachers for Vinix. Running the real browsers
+Chromium and Firefox have been useful teachers for Vinix. Running the real browsers
 exposed gaps in procfs, Unix socket credentials, descriptor access modes and fault
 handling. Later, a blank Firefox window led us to two more problems: conflicting LLVM
 versions in the graphics runtime, and JIT mappings that our memory protection policy
@@ -9,6 +9,14 @@ us run Alpine's ARM64 browser binaries, with their existing libraries and proces
 models. The work described here comes from our September browser bring-up commits.
 Those applications put several kernel interfaces together in ways that our smaller
 programs had never exercised.
+
+![Chromium running on the Vinix desktop in QEMU](images/chromium-vinix-desktop.png)
+
+*Chromium rendering its local test page in a Vinix desktop window under QEMU.*
+
+![Firefox running on the Vinix desktop in QEMU](images/firefox-vinix-desktop.png)
+
+*Firefox rendering its local test page in a Vinix desktop window under QEMU.*
 
 ## A browser crash should end a process
 
