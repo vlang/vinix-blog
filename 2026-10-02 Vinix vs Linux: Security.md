@@ -9,6 +9,71 @@ counterparts to many of these protections, as well as security infrastructure
 that Vinix has yet to build. Here is a comparison of the current development
 implementation, rather than a security score for either system.
 
+## What Linux lacks in the same form
+
+The clearest differences are default software signal-frame cookies and randomized
+global process IDs. Vinix also supplies native pledge/unveil interfaces and a
+file-focused securelevel, and makes userspace W^X a default. Some are mechanisms
+upstream Linux lacks in this form; others are defaults for a protection Linux can
+enable through a different policy.
+
+- **Software signal-frame cookies without special CPU features.** On both x86-64
+  and ARM64, Vinix checks a
+  [process-secret cookie](https://github.com/vlang/vinix/blob/e4c5ffc4b05f8fa9cd66b1268e6b9aecb7545ffc/kernel/proc/sigcookie.v)
+  tied to the signal frame's address before accepting signal return. This applies
+  without an application
+  enabling a shadow stack. Ordinary upstream Linux signal frames on these
+  architectures do not carry the same secret-cookie check, as shown by its
+  [x86-64](https://github.com/torvalds/linux/blob/master/arch/x86/kernel/signal_64.c)
+  and [ARM64](https://github.com/torvalds/linux/blob/master/arch/arm64/kernel/signal.c)
+  return paths. Linux does validate CPU state, and enabled CET or GCS supplies
+  hardware-backed token checks on supported machines. Vinix's cookie covers an
+  additional case: machines and programs using neither hardware feature. It
+  depends on the secret remaining unknown and does not authenticate every saved
+  register.
+
+- **Randomized global PIDs and TIDs by default.** After init,
+  [Vinix's allocator](https://github.com/vlang/vinix/blob/e4c5ffc4b05f8fa9cd66b1268e6b9aecb7545ffc/kernel/proc/proc.v)
+  normally chooses random IDs and avoids recently released ones. Linux's
+  ordinary
+  [PID allocator](https://github.com/torvalds/linux/blob/master/kernel/pid.c)
+  uses cyclic allocation instead. The Vinix difference makes guessing the next
+  ID harder; it is not an access-control boundary. Vinix can fall back to
+  sequential allocation, and its namespace-local IDs remain sequential.
+
+- **Native semantic application promises.** Vinix offers OpenBSD-style
+  [`pledge`](https://github.com/vlang/vinix/blob/e4c5ffc4b05f8fa9cd66b1268e6b9aecb7545ffc/kernel/proc/pledge.v)
+  and `unveil` as kernel interfaces. Named promises such as `rpath`, `inet` and
+  `recvfd` describe operations, with checks in syscall, path and socket handling.
+  Upstream Linux has no native pledge/unveil ABI. Its
+  [seccomp filters](https://docs.kernel.org/userspace-api/seccomp_filter.html)
+  and [Landlock rulesets](https://docs.kernel.org/userspace-api/landlock.html)
+  provide related confinement through other interfaces. The difference is a
+  compact policy vocabulary integrated into the kernel; both systems require
+  applications or launchers to install confinement.
+
+- **A securelevel restriction beyond the file-flag capability check.** With
+  Vinix's securelevel above zero,
+  [a process cannot clear existing immutable or append-only inode bits](https://github.com/vlang/vinix/blob/e4c5ffc4b05f8fa9cd66b1268e6b9aecb7545ffc/kernel/fs/attributes.v)
+  even while holding `CAP_LINUX_IMMUTABLE`. Ordinary root also cannot lower that
+  positive level; init is the exception. Linux's
+  [generic file-flag setter](https://github.com/torvalds/linux/blob/master/fs/file_attr.c)
+  checks the capability and security policy, but has no BSD-style global
+  securelevel enforcing this particular rule. Linux administrators can constrain
+  flag changes by dropping capabilities or applying mandatory policy. Vinix's
+  extra restriction must be configured: securelevel defaults to zero.
+
+- **Userspace W^X as the default mapping policy.** Vinix normally
+  [rejects a mapping that is writable and executable at the same time](https://github.com/vlang/vinix/blob/e4c5ffc4b05f8fa9cd66b1268e6b9aecb7545ffc/kernel/memory/mmap/mmap.v),
+  including an unprivileged program's request for RWX JIT memory. Exceptions require
+  administrator authorization. Upstream Linux's ordinary mapping policy does
+  not impose this default; its
+  [MDWE checks](https://github.com/torvalds/linux/blob/master/mm/vma.h)
+  depend on the process enabling MDWE, and security modules can impose other
+  restrictions. This is a difference in defaults. Linux can enforce executable
+  memory restrictions, including MDWE's stricter ban on gaining execute
+  permission after a nonexecutable mapping has been created.
+
 ## The mechanisms at a glance
 
 | Security goal | Vinix | Linux |
@@ -17,8 +82,8 @@ implementation, rather than a security score for either system.
 | Restrict filesystem access | Application opts into `unveil` and locks its view | Landlock for self-confinement; SELinux/AppArmor for administrator policy |
 | Prevent writable executable memory | W^X by default, with administrator-authorized exceptions | Userspace restrictions through MDWE or security policy; separate strict kernel RWX protections |
 | Seal mapping permissions and lifetime | Application opts into `mimmutable` | Application or runtime opts into `mseal` |
-| Harden signal return | OpenBSD-style frame cookies by default | Architecture-specific state validation; optional x86 CET shadow stacks |
-| Make addresses and identifiers less predictable | ASLR and randomized PIDs/TIDs | ASLR; ordinary PID allocation advances through available IDs |
+| Harden signal return | OpenBSD-style frame cookies by default | Architecture-specific state validation; optional x86 CET or ARM64 GCS |
+| Make addresses and identifiers less predictable | ASLR and randomized global PIDs/TIDs | ASLR; ordinary PID allocation advances through available IDs |
 | Avoid copying sensitive state into forked children | `minherit` and Linux-compatible memory advice | `MADV_WIPEONFORK` and `MADV_DONTFORK` |
 | Protect the kernel boundary | Checked copies, hardware access restrictions, canaries, read-only kernel mappings | Corresponding protections, plus a broader hardening framework |
 | Protect sealed files from privileged changes | Immutable/append flags plus configured securelevel | Immutable/append flags, capabilities and mandatory policy |
@@ -139,17 +204,22 @@ checks frame accessibility and restricts restored privilege state and flags. On
 compatible x86 systems, enabled
 [CET userspace shadow stacks](https://docs.kernel.org/arch/x86/shstk.html) add a
 protected shadow-stack token that signal return verifies. Hardware, kernel,
-toolchain and runtime support are required. Vinix's default cookies and Linux's
-architecture-specific validation and optional CET are different mechanisms.
+toolchain and runtime support are required. Linux also supports ARM64
+[Guarded Control Stacks](https://docs.kernel.org/arch/arm64/gcs.html), with signal
+cap-token validation when GCS is enabled. Vinix's default software cookies and
+Linux's architecture-specific validation and optional hardware protections are
+different mechanisms.
 
 ## Randomness, ASLR and forked secrets
 
 Vinix randomizes PIE, interpreter, stack, mmap and heap-break placement, and the
 ARM64 signal trampoline. It also uses
-[random process and thread IDs](https://github.com/vlang/vinix/commit/e9afc902)
+[random global process and thread IDs](https://github.com/vlang/vinix/commit/e9afc902)
 after init, avoiding recently released IDs and IDs still naming live groups or
-sessions. Allocation has a sequential fallback. Random PIDs reduce predictability;
-they do not replace permission checks.
+sessions. Allocation has a sequential fallback, and
+[namespace-local IDs](https://github.com/vlang/vinix/blob/e4c5ffc4b05f8fa9cd66b1268e6b9aecb7545ffc/kernel/proc/pidns.v)
+are still allocated sequentially. Random PIDs reduce predictability; they do not
+replace permission checks.
 
 Linux already has [ASLR for those major process regions](https://docs.kernel.org/admin-guide/sysctl/kernel.html#randomize-va-space),
 including heap randomization at the full setting. Its
