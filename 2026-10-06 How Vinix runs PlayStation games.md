@@ -2,7 +2,7 @@ Vinix's ARM64 desktop can now run original PlayStation games in a native window.
 tested Crash Bandicoot's USA disc image through its title screen and island map
 into N. Sanity Beach, then moved, jumped and spun through the starting crates.
 
-![Crash Bandicoot running in Vinix's PlayStation window, with Crash jumping in N. Sanity Beach](images/ps1-crash-bandicoot-vinix.png)
+![Crash Bandicoot running in Vinix's PlayStation window, with Crash jumping in N. Sanity Beach](images/ps1-crash-bandicoot-vinix-desktop.png)
 
 The game runs through [PCSX-ReARMed](https://github.com/libretro/pcsx_rearmed),
 an existing PlayStation emulator. We built its unchanged libretro core for
