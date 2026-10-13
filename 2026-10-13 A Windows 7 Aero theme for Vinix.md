@@ -49,6 +49,11 @@ backdrop comes through as well as the hue. Theme and glass colour changes take
 effect immediately and are saved with the desktop's other preferences. They
 are restored on the next launch when the desktop's home volume is persistent.
 
+![Vinix Settings showing the Windows 7 theme and glass colour palette over Terminal running fastfetch](images/windows7-aero-fastfetch-vinix.png)
+
+Here is the theme with Settings open over Terminal running fastfetch. The glass
+frames and taskbar carry the selected Sky colour across the desktop.
+
 ## Drawing glass in V
 
 The Aero renderer lives in
